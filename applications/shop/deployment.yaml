@@ -1,0 +1,137 @@
+version: '3'
+
+services:
+  adminer:
+    image: adminer
+    ports:
+      - 8080:8080
+    networks:
+      - shopDBNet
+      - authDBNet
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+    networks:
+      - managerNet
+      - daemonNet
+  shopDB:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+    ports:
+      - 5003:5003 #useless
+    networks:
+      - shopDBNet
+      - daemonDBNet
+      - adminNet
+      - customerNet
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 10s
+      retries: 10
+    volumes:
+      - shopData:/var/lib/mysql
+  shopDBMigration:
+    image: shopdbmigration
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    depends_on:
+      shopDB:
+        condition: service_healthy
+    networks:
+      - shopDBNet
+  daemon:
+    image: daemon
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    ports:
+      - 5005:5005
+    depends_on:
+      - shopDBMigration
+      - redis
+    networks:
+      - daemonDBNet
+      - daemonNet
+  manager:
+    image: manager
+    ports:
+      - 5001:5001
+    depends_on:
+      - shopDBMigration
+      - redis
+      - authDBMigration
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    networks:
+      - managerNet
+  customer:
+    image: customer
+    ports:
+      - 5006:5006
+    depends_on:
+      - shopDBMigration
+      - redis
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    networks:
+      - customerNet
+  admin:
+    image: admin
+    ports:
+      - 5010:5010
+    depends_on:
+      - shopDBMigration
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    networks:
+      - adminNet
+  authenticationDB:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 10s
+      retries: 10
+    networks:
+      - authDBNet
+    volumes:
+      - authData:/var/lib/mysql
+  authDBMigration:
+    image: authdbmigration
+    environment:
+      - DATABASE_URL=authenticationDB
+    depends_on:
+      authenticationDB:
+        condition: service_healthy
+    networks:
+      - authDBNet
+  authentication:
+    image: authentication
+    environment:
+      - DATABASE_URL=authenticationDB
+    ports:
+      - 5002:5002
+    depends_on:
+      - authDBMigration
+    networks:
+      - authDBNet
+
+networks:
+  authDBNet:
+  managerNet:
+  daemonDBNet:
+  daemonNet:
+  shopDBNet:
+  adminNet:
+  customerNet:
+
+volumes:
+  shopData:
+  authData:

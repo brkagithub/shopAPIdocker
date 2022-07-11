@@ -1,0 +1,128 @@
+version: '3'
+
+services:
+  adminer:
+    image: adminer
+    ports:
+      - 8080:8080
+    networks:
+      - shopDBNet
+      - authDBNet
+  redis:
+    image: redis
+    ports:
+      - 6379:6379
+    networks:
+      - managerNet
+      - daemonNet
+  shopDB:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+    ports:
+      - 5003:5003 #useless
+    networks:
+      - shopDBNet
+      - daemonDBNet
+      - adminNet
+      - customerNet
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 10s
+      retries: 10
+    volumes:
+      - shopDataa:/var/lib/mysql
+  shopDBMigration:
+    image: shopdbmigration
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    networks:
+      - shopDBNet
+  daemon:
+    image: daemon
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    ports:
+      - 5005:5005
+    networks:
+      - daemonDBNet
+      - daemonNet
+  manager:
+    image: manager
+    deploy:
+      replicas: 3
+    ports:
+      - 5001:5001
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    networks:
+      - managerNet
+  customer:
+    image: customer
+    deploy:
+      replicas: 3
+    ports:
+      - 5006:5006
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    networks:
+      - customerNet
+  admin:
+    image: admin
+    ports:
+      - 5010:5010
+    environment:
+      - REDIS_URL=redis
+      - DATABASE_URL=shopDB
+    networks:
+      - adminNet
+  authenticationDB:
+    image: mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 10s
+      retries: 10
+    networks:
+      - authDBNet
+    volumes:
+      - authDataa:/var/lib/mysql
+  authDBMigration:
+    image: authdbmigration
+    environment:
+      - DATABASE_URL=authenticationDB
+    networks:
+      - authDBNet
+  authentication:
+    image: authentication
+    environment:
+      - DATABASE_URL=authenticationDB
+    ports:
+      - 5002:5002
+    networks:
+      - authDBNet
+
+networks:
+  authDBNet:
+    driver: overlay
+  managerNet:
+    driver: overlay
+  daemonDBNet:
+    driver: overlay
+  daemonNet:
+    driver: overlay
+  shopDBNet:
+    driver: overlay
+  adminNet:
+    driver: overlay
+  customerNet:
+    driver: overlay
+
+volumes:
+  shopDataa:
+  authDataa:
